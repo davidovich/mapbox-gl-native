@@ -65,7 +65,8 @@ public class MapView extends FrameLayout {
   private boolean hasSurface;
 
   private MapboxMap mapboxMap;
-  private MapCallback mapCallback;
+  private MapChangeResultHandler mapCallback;
+  private MapChangeDispatcher mapChangeDispatcher;
 
   private MapGestureDetector mapGestureDetector;
   private MapKeyListener mapKeyListener;
@@ -115,7 +116,7 @@ public class MapView extends FrameLayout {
     setContentDescription(context.getString(R.string.mapbox_mapActionDescription));
 
     // create native Map object
-    nativeMapView = new NativeMapView(this);
+    nativeMapView = new NativeMapView(this, mapChangeDispatcher = new MapChangeDispatcher());
 
     // callback for focal point invalidation
     FocalPointInvalidator focalPoint = new FocalPointInvalidator(compassView);
@@ -141,8 +142,8 @@ public class MapView extends FrameLayout {
     Markers markers = new MarkerContainer(nativeMapView, this, annotationsArray, iconManager, markerViewManager);
     Polygons polygons = new PolygonContainer(nativeMapView, annotationsArray);
     Polylines polylines = new PolylineContainer(nativeMapView, annotationsArray);
-    AnnotationManager annotationManager = new AnnotationManager(nativeMapView, this, annotationsArray,
-      markerViewManager, iconManager, annotations, markers, polygons, polylines);
+    AnnotationManager annotationManager = new AnnotationManager(this, annotationsArray, markerViewManager,
+      iconManager, annotations, markers, polygons, polylines);
     Transform transform = new Transform(nativeMapView, annotationManager.getMarkerViewManager(), trackingSettings,
       cameraChangeDispatcher);
     mapboxMap = new MapboxMap(nativeMapView, transform, uiSettings, trackingSettings, myLocationViewSettings, proj,
@@ -174,6 +175,9 @@ public class MapView extends FrameLayout {
     // notify Map object about current connectivity state
     nativeMapView.setReachability(ConnectivityReceiver.instance(context).isConnected(context));
 
+    // bind internal components for map change events
+    mapChangeDispatcher.bind(mapCallback = new MapChangeResultHandler(mapboxMap));
+
     // initialise MapboxMap
     mapboxMap.initialise(context, options);
   }
@@ -202,7 +206,6 @@ public class MapView extends FrameLayout {
     }
 
     initialiseDrawingSurface(textureMode);
-    addOnMapChangedListener(mapCallback = new MapCallback(mapboxMap));
   }
 
   private void initialiseDrawingSurface(boolean textureMode) {
@@ -501,7 +504,7 @@ public class MapView extends FrameLayout {
       if (destroyed) {
         return;
       }
-      mapboxMap.onUpdateRegionChange();
+      mapboxMap.onCameraChange();
     }
   }
 
@@ -540,7 +543,14 @@ public class MapView extends FrameLayout {
    *
    * @param listener The callback that's invoked on every frame rendered to the map view.
    * @see MapView#removeOnMapChangedListener(OnMapChangedListener)
+   * @deprecated use {@link OnCameraWillChangeListener}, {@link OnCameraDidChangeListener},
+   * {@link OnCameraIsChangingListener}, {@link OnWillStartLoadingMapListener}, {@link OnDidFinishLoadingMapListener},
+   * {@link OnDidFailLoadingMapListener}, {@link OnDidFinishRenderingFrameListener},
+   * {@link OnDidFinishRenderingFrameListener}, {@link OnWillStartRenderingMapListener}.
+   * {@link OnDidFinishRenderingMapListener}, {@link OnDidFinishLoadingStyleListener} and
+   * {@link OnSourceChangedListener} instead
    */
+  @Deprecated
   public void addOnMapChangedListener(@Nullable OnMapChangedListener listener) {
     if (listener != null) {
       nativeMapView.addOnMapChangedListener(listener);
@@ -552,11 +562,125 @@ public class MapView extends FrameLayout {
    *
    * @param listener The previously added callback to remove.
    * @see MapView#addOnMapChangedListener(OnMapChangedListener)
+   * @deprecated use {@link OnCameraWillChangeListener}, {@link OnCameraDidChangeListener},
+   * {@link OnCameraIsChangingListener}, {@link OnWillStartLoadingMapListener},
+   * {@link OnDidFinishLoadingMapListener}, {@link OnDidFailLoadingMapListener},
+   * {@link OnDidFinishRenderingFrameListener}, {@link OnDidFinishRenderingFrameListener},
+   * {@link OnWillStartRenderingMapListener}. {@link OnDidFinishRenderingMapListener},
+   * {@link OnDidFinishLoadingStyleListener} and {@link OnSourceChangedListener} instead
    */
   public void removeOnMapChangedListener(@Nullable OnMapChangedListener listener) {
     if (listener != null) {
       nativeMapView.removeOnMapChangedListener(listener);
     }
+  }
+
+  /**
+   * Set a callback that's invoked when the camera region will change.
+   *
+   * @param listener The callback that's invoked when the camera region will change
+   */
+  public void setOnCameraWillChangeListener(OnCameraWillChangeListener listener) {
+    mapChangeDispatcher.setOnCameraWillChangeListener(listener);
+  }
+
+  /**
+   * Set a callback that's invoked when the camera is changing.
+   *
+   * @param listener The callback that's invoked when the camera is changing
+   */
+  public void setOnCameraIsChangingListener(OnCameraIsChangingListener listener) {
+    mapChangeDispatcher.setOnCameraIsChangingListener(listener);
+  }
+
+  /**
+   * Set a callback that's invoked when the camera region did change.
+   *
+   * @param listener The callback that's invoked when the camera region did change
+   */
+  public void setOnCameraDidChangeListener(OnCameraDidChangeListener listener) {
+    mapChangeDispatcher.setOnCameraDidChangeListener(listener);
+  }
+
+  /**
+   * Set a callback that's invoked when the map will start loading.
+   *
+   * @param listener The callback that's invoked when the map will start loading
+   */
+  public void setOnWillStartLoadingMapListener(OnWillStartLoadingMapListener listener) {
+    mapChangeDispatcher.setOnWillStartLoadingMapListener(listener);
+  }
+
+  /**
+   * Set a callback that's invoked when the map has finished loading.
+   *
+   * @param listener The callback that's invoked when the map has finished loading
+   */
+  public void setOnDidFinishLoadingMapListener(OnDidFinishLoadingMapListener listener) {
+    mapChangeDispatcher.setOnDidFinishLoadingMapListener(listener);
+  }
+
+  /**
+   * Set a callback that's invoked when the map failed to load.
+   *
+   * @param listener The callback that's invoked when the map failed to load
+   */
+  public void setOnDidFailLoadingMapListener(OnDidFailLoadingMapListener listener) {
+    mapChangeDispatcher.setOnDidFailLoadingMapListener(listener);
+  }
+
+  /**
+   * Set a callback that's invoked when the map will start rendering a frame.
+   *
+   * @param listener The callback that's invoked when the camera will start rendering a frame
+   */
+  public void setOnWillStartRenderingFrameListener(OnWillStartRenderingFrameListener listener) {
+    mapChangeDispatcher.setOnWillStartRenderingFrameListener(listener);
+  }
+
+  /**
+   * Set a callback that's invoked when the map has finished rendering a frame.
+   *
+   * @param listener The callback that's invoked when the map has finished rendering a frame
+   */
+  public void setOnDidFinishRenderingFrameListener(OnDidFinishRenderingFrameListener listener) {
+    mapChangeDispatcher.setOnDidFinishRenderingFrameListener(listener);
+  }
+
+  /**
+   * Set a callback that's invoked when the map will start rendering.
+   *
+   * @param listener The callback that's invoked when the map will start rendering
+   */
+  public void setOnWillStartRenderingMapListener(OnWillStartRenderingMapListener listener) {
+    mapChangeDispatcher.setOnWillStartRenderingMapListener(listener);
+  }
+
+  /**
+   * Set a callback that's invoked when the map has finished rendering.
+   *
+   * @param listener The callback that's invoked when the map has finished rendering
+   */
+  public void setOnDidFinishRenderingMapListener(OnDidFinishRenderingMapListener listener) {
+    mapChangeDispatcher.setOnDidFinishRenderingMapListener(listener);
+  }
+
+  /**
+   * Set a callback that's invoked when the style has finished loading.
+   *
+   * @param listener The callback that's invoked when the style has finished loading
+   */
+  public void setOnDidFinishLoadingStyleListener(OnDidFinishLoadingStyleListener listener) {
+    mapChangeDispatcher.setOnDidFinishLoadingStyleListener(listener);
+  }
+
+  /**
+   * Set a callback that's invoked when a map source has changed.
+   *
+   * @param listener The callback that's invoked when the source has changed
+   */
+  public void setOnSourceChangedListener(OnSourceChangedListener listener) {
+    mapChangeDispatcher.setOnSourceChangedListener(listener);
   }
 
   /**
@@ -587,6 +711,12 @@ public class MapView extends FrameLayout {
    * Definition of a map change event.
    *
    * @see MapView.OnMapChangedListener#onMapChanged(int)
+   * @deprecated use {@link OnCameraWillChangeListener}, {@link OnCameraDidChangeListener},
+   * {@link OnCameraIsChangingListener}, {@link OnWillStartLoadingMapListener},
+   * {@link OnDidFinishLoadingMapListener}, {@link OnDidFailLoadingMapListener},
+   * {@link OnDidFinishRenderingFrameListener}, {@link OnDidFinishRenderingFrameListener},
+   * {@link OnWillStartRenderingMapListener}, {@link OnDidFinishRenderingMapListener},
+   * {@link OnDidFinishLoadingStyleListener} and {@link OnSourceChangedListener} instead
    */
   @IntDef( {REGION_WILL_CHANGE,
     REGION_WILL_CHANGE_ANIMATED,
@@ -606,6 +736,7 @@ public class MapView extends FrameLayout {
     SOURCE_DID_CHANGE
   })
   @Retention(RetentionPolicy.SOURCE)
+  @Deprecated
   public @interface MapChange {
   }
 
@@ -618,7 +749,9 @@ public class MapView extends FrameLayout {
    *
    * @see MapChange
    * @see MapView.OnMapChangedListener
+   * @deprecated use {@link OnCameraWillChangeListener} instead
    */
+  @Deprecated
   public static final int REGION_WILL_CHANGE = 0;
 
   /**
@@ -630,7 +763,9 @@ public class MapView extends FrameLayout {
    *
    * @see MapChange
    * @see MapView.OnMapChangedListener
+   * @deprecated use {@link OnCameraWillChangeListener} instead
    */
+  @Deprecated
   public static final int REGION_WILL_CHANGE_ANIMATED = 1;
 
   /**
@@ -641,7 +776,9 @@ public class MapView extends FrameLayout {
    *
    * @see MapChange
    * @see MapView.OnMapChangedListener
+   * @deprecated use {@link OnCameraIsChangingListener} instead
    */
+  @Deprecated
   public static final int REGION_IS_CHANGING = 2;
 
   /**
@@ -653,7 +790,9 @@ public class MapView extends FrameLayout {
    *
    * @see MapChange
    * @see MapView.OnMapChangedListener
+   * @deprecated use {@link OnCameraDidChangeListener} instead
    */
+  @Deprecated
   public static final int REGION_DID_CHANGE = 3;
 
   /**
@@ -665,7 +804,9 @@ public class MapView extends FrameLayout {
    *
    * @see MapChange
    * @see MapView.OnMapChangedListener
+   * @deprecated use {@link OnCameraDidChangeListener} instead
    */
+  @Deprecated
   public static final int REGION_DID_CHANGE_ANIMATED = 4;
 
   /**
@@ -676,7 +817,9 @@ public class MapView extends FrameLayout {
    *
    * @see MapChange
    * @see MapView.OnMapChangedListener
+   * @deprecated use {@link OnWillStartLoadingMapListener} instead
    */
+  @Deprecated
   public static final int WILL_START_LOADING_MAP = 5;
 
   /**
@@ -687,7 +830,9 @@ public class MapView extends FrameLayout {
    *
    * @see MapChange
    * @see MapView.OnMapChangedListener
+   * @deprecated use {@link OnDidFinishLoadingMapListener} instead
    */
+  @Deprecated
   public static final int DID_FINISH_LOADING_MAP = 6;
 
   /**
@@ -698,7 +843,9 @@ public class MapView extends FrameLayout {
    *
    * @see MapChange
    * @see MapView.OnMapChangedListener
+   * @deprecated use {@link OnDidFailLoadingMapListener} instead
    */
+  @Deprecated
   public static final int DID_FAIL_LOADING_MAP = 7;
 
   /**
@@ -709,7 +856,9 @@ public class MapView extends FrameLayout {
    *
    * @see MapChange
    * @see MapView.OnMapChangedListener
+   * @deprecated use {@link OnWillStartRenderingFrameListener} instead
    */
+  @Deprecated
   public static final int WILL_START_RENDERING_FRAME = 8;
 
   /**
@@ -720,7 +869,9 @@ public class MapView extends FrameLayout {
    *
    * @see MapChange
    * @see MapView.OnMapChangedListener
+   * @deprecated use {@link OnDidFinishRenderingFrameListener} instead
    */
+  @Deprecated
   public static final int DID_FINISH_RENDERING_FRAME = 9;
 
   /**
@@ -731,7 +882,9 @@ public class MapView extends FrameLayout {
    *
    * @see MapChange
    * @see MapView.OnMapChangedListener
+   * @deprecated use {@link OnDidFinishRenderingFrameListener} instead
    */
+  @Deprecated
   public static final int DID_FINISH_RENDERING_FRAME_FULLY_RENDERED = 10;
 
   /**
@@ -742,7 +895,9 @@ public class MapView extends FrameLayout {
    *
    * @see MapChange
    * @see MapView.OnMapChangedListener
+   * @deprecated use {@link OnWillStartRenderingMapListener} instead
    */
+  @Deprecated
   public static final int WILL_START_RENDERING_MAP = 11;
 
   /**
@@ -753,7 +908,9 @@ public class MapView extends FrameLayout {
    *
    * @see MapChange
    * @see MapView.OnMapChangedListener
+   * @deprecated use {@link OnDidFinishRenderingMapListener} instead
    */
+  @Deprecated
   public static final int DID_FINISH_RENDERING_MAP = 12;
 
   /**
@@ -764,7 +921,9 @@ public class MapView extends FrameLayout {
    *
    * @see MapChange
    * @see MapView.OnMapChangedListener
+   * @deprecated use {@link OnDidFinishLoadingMapListener} instead
    */
+  @Deprecated
   public static final int DID_FINISH_RENDERING_MAP_FULLY_RENDERED = 13;
 
   /**
@@ -775,7 +934,9 @@ public class MapView extends FrameLayout {
    *
    * @see MapChange
    * @see MapView.OnMapChangedListener
+   * @deprecated use {@link OnDidFinishLoadingStyleListener} instead
    */
+  @Deprecated
   public static final int DID_FINISH_LOADING_STYLE = 14;
 
   /**
@@ -786,8 +947,175 @@ public class MapView extends FrameLayout {
    *
    * @see MapChange
    * @see MapView.OnMapChangedListener
+   * @deprecated use {@link OnSourceChangedListener} instead
    */
+  @Deprecated
   public static final int SOURCE_DID_CHANGE = 15;
+
+  /**
+   * Interface definition for a callback to be invoked when the camera region will change.
+   * <p>
+   * Register this callback with {@link MapView#setOnCameraWillChangeListener(OnCameraWillChangeListener)}
+   * </p>
+   */
+  public interface OnCameraWillChangeListener {
+
+    /**
+     * Called when the camera region will change.
+     */
+    void onCameraWillChange(boolean animated);
+  }
+
+  /**
+   * Interface definition for a callback to be invoked when the camera is changing.
+   * <p>
+   * {@link MapView#setOnCameraIsChangingListener(OnCameraIsChangingListener)}
+   * </p>
+   */
+  public interface OnCameraIsChangingListener {
+    /**
+     * Called when the camera is changing.
+     */
+    void onCameraIsChanging();
+  }
+
+  /**
+   * Interface definition for a callback to be invoked when the map region did change.
+   * <p>
+   * {@link MapView#setOnCameraDidChangeListener(OnCameraDidChangeListener)}
+   * </p>
+   */
+  public interface OnCameraDidChangeListener {
+    /**
+     * Called when the camera did change.
+     */
+    void onCameraDidChange(boolean animated);
+  }
+
+  /**
+   * Interface definition for a callback to be invoked when the map will start loading.
+   * <p>
+   * {@link MapView#setOnWillStartLoadingMapListener(OnWillStartLoadingMapListener)}
+   * </p>
+   */
+  public interface OnWillStartLoadingMapListener {
+    /**
+     * Called when the map will start loading.
+     */
+    void onWillStartLoadingMap();
+  }
+
+  /**
+   * Interface definition for a callback to be invoked when the map finished loading.
+   * <p>
+   * {@link MapView#setOnDidFinishLoadingMapListener(OnDidFinishLoadingMapListener)}
+   * </p>
+   */
+  public interface OnDidFinishLoadingMapListener {
+    /**
+     * Called when the map has finished loading.
+     */
+    void onDidFinishLoadingMap();
+  }
+
+  /**
+   * Interface definition for a callback to be invoked when the map is changing.
+   * <p>
+   * {@link MapView#setOnDidFailLoadingMapListener(OnDidFailLoadingMapListener)}
+   * </p>
+   */
+  public interface OnDidFailLoadingMapListener {
+    /**
+     * Called when the map failed to load.
+     *
+     * @param errorMessage The reason why the map failed to load
+     */
+    void onDidFailLoadingMap(String errorMessage);
+  }
+
+  /**
+   * Interface definition for a callback to be invoked when the map will start rendering a frame.
+   * <p>
+   * {@link MapView#setOnWillStartRenderingFrameListener(OnWillStartRenderingFrameListener)}
+   * </p>
+   */
+  public interface OnWillStartRenderingFrameListener {
+    /**
+     * Called when the map will start rendering a frame.
+     */
+    void onWillStartRenderingFrame();
+  }
+
+  /**
+   * Interface definition for a callback to be invoked when the map finished rendering a frame.
+   * <p>
+   * {@link MapView#setOnDidFinishRenderingFrameListener(OnDidFinishRenderingFrameListener)}
+   * </p>
+   */
+  public interface OnDidFinishRenderingFrameListener {
+    /**
+     * Called when the map has finished rendering a frame
+     *
+     * @param partial true if map is still rendering frames, false if all frames have been rendered
+     */
+    void onDidFinishRenderingFrame(boolean partial);
+  }
+
+  /**
+   * Interface definition for a callback to be invoked when the map will start rendering the map.
+   * <p>
+   * {@link MapView#setOnDidFailLoadingMapListener(OnDidFailLoadingMapListener)}
+   * </p>
+   */
+  public interface OnWillStartRenderingMapListener {
+    /**
+     * Called when the map will start rendering.
+     */
+    void onWillStartRenderingMap();
+  }
+
+  /**
+   * Interface definition for a callback to be invoked when the map is changing.
+   * <p>
+   * {@link MapView#setOnDidFinishRenderingMapListener(OnDidFinishRenderingMapListener)}
+   * </p>
+   */
+  public interface OnDidFinishRenderingMapListener {
+    /**
+     * Called when the map has finished rendering.
+     *
+     * @param partial true if map is partially rendered, false if fully rendered
+     */
+    void onDidFinishRenderingMap(boolean partial);
+  }
+
+  /**
+   * Interface definition for a callback to be invoked when the map has loaded the style.
+   * <p>
+   * {@link MapView#setOnDidFailLoadingMapListener(OnDidFailLoadingMapListener)}
+   * </p>
+   */
+  public interface OnDidFinishLoadingStyleListener {
+    /**
+     * Called when a style has finished loading.
+     */
+    void onDidFinishLoadingStyle();
+  }
+
+  /**
+   * Interface definition for a callback to be invoked when a map source has changed.
+   * <p>
+   * {@link MapView#setOnDidFailLoadingMapListener(OnDidFailLoadingMapListener)}
+   * </p>
+   */
+  public interface OnSourceChangedListener {
+    /**
+     * Called when a map source has changed.
+     *
+     * @param id the id of the source that has changed
+     */
+    void onSourceChangedListener(String id);
+  }
 
   /**
    * Interface definition for a callback to be invoked when the displayed map view changes.
@@ -797,6 +1125,12 @@ public class MapView extends FrameLayout {
    *
    * @see MapView#addOnMapChangedListener(OnMapChangedListener)
    * @see MapView.MapChange
+   * @deprecated use {@link OnCameraWillChangeListener}, {@link OnCameraDidChangeListener},
+   * {@link OnCameraIsChangingListener}, {@link OnWillStartLoadingMapListener}, {@link OnDidFinishLoadingMapListener},
+   * {@link OnDidFailLoadingMapListener}, {@link OnDidFinishRenderingFrameListener},
+   * {@link OnDidFinishRenderingFrameListener},{@link OnWillStartRenderingMapListener},
+   * {@link OnDidFinishRenderingMapListener}, {@link OnDidFinishLoadingStyleListener} and
+   * {@link OnSourceChangedListener} instead
    */
   public interface OnMapChangedListener {
     /**
@@ -917,19 +1251,21 @@ public class MapView extends FrameLayout {
     }
   }
 
-  private static class MapCallback implements OnMapChangedListener {
+  static class MapChangeResultHandler implements MapView.OnDidFinishLoadingStyleListener,
+    MapView.OnDidFinishRenderingFrameListener, MapView.OnDidFinishLoadingMapListener,
+    MapView.OnCameraIsChangingListener, MapView.OnCameraDidChangeListener {
 
     private final MapboxMap mapboxMap;
     private final List<OnMapReadyCallback> onMapReadyCallbackList = new ArrayList<>();
     private boolean initialLoad = true;
 
-    MapCallback(MapboxMap mapboxMap) {
+    MapChangeResultHandler(MapboxMap mapboxMap) {
       this.mapboxMap = mapboxMap;
     }
 
     @Override
-    public void onMapChanged(@MapChange int change) {
-      if (change == DID_FINISH_LOADING_STYLE && initialLoad) {
+    public void onDidFinishLoadingStyle() {
+      if (initialLoad) {
         initialLoad = false;
         new Handler().post(new Runnable() {
           @Override
@@ -939,10 +1275,34 @@ public class MapView extends FrameLayout {
             mapboxMap.onPostMapReady();
           }
         });
-      } else if (change == DID_FINISH_RENDERING_FRAME || change == DID_FINISH_RENDERING_FRAME_FULLY_RENDERED) {
-        mapboxMap.onUpdateFullyRendered();
-      } else if (change == REGION_IS_CHANGING || change == REGION_DID_CHANGE || change == DID_FINISH_LOADING_MAP) {
-        mapboxMap.onUpdateRegionChange();
+      }
+    }
+
+    @Override
+    public void onDidFinishRenderingFrame(boolean partial) {
+      if (partial) {
+        mapboxMap.onDidFinishRenderingFrame();
+      } else {
+        mapboxMap.onDidFinishRenderingFrameFully();
+      }
+    }
+
+    @Override
+    public void onDidFinishLoadingMap() {
+      // we require an additional update after the map has finished loading
+      // in case an end user action hasn't been invoked at that time
+      mapboxMap.onCameraChange();
+    }
+
+    @Override
+    public void onCameraIsChanging() {
+      mapboxMap.onCameraChange();
+    }
+
+    @Override
+    public void onCameraDidChange(boolean animated) {
+      if (animated) {
+        mapboxMap.onCameraDidChangeAnimated();
       }
     }
 

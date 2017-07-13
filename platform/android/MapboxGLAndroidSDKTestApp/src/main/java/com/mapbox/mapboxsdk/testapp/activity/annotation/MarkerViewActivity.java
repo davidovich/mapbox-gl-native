@@ -36,6 +36,7 @@ import com.mapbox.mapboxsdk.testapp.model.annotations.CountryMarkerViewOptions;
 import com.mapbox.mapboxsdk.testapp.model.annotations.TextMarkerView;
 import com.mapbox.mapboxsdk.testapp.model.annotations.TextMarkerViewOptions;
 
+import java.util.Locale;
 import java.util.Random;
 
 /**
@@ -144,15 +145,18 @@ public class MarkerViewActivity extends AppCompatActivity {
 
         final ViewGroup markerViewContainer = markerViewManager.getMarkerViewContainer();
 
-        // add a change listener to validate the size of amount of child views
-        mapView.addOnMapChangedListener(new MapView.OnMapChangedListener() {
+
+        mapView.setOnCameraIsChangingListener(new MapView.OnCameraIsChangingListener() {
           @Override
-          public void onMapChanged(@MapView.MapChange int change) {
-            if (change == MapView.REGION_IS_CHANGING || change == MapView.REGION_DID_CHANGE) {
-              if (!markerViewManager.getMarkerViewAdapters().isEmpty() && viewCountView != null) {
-                viewCountView.setText("ViewCache size " + markerViewContainer.getChildCount());
-              }
-            }
+          public void onCameraIsChanging() {
+            updateMarkerViewCountText(markerViewManager, viewCountView, markerViewContainer);
+          }
+        });
+
+        mapView.setOnCameraDidChangeListener(new MapView.OnCameraDidChangeListener() {
+          @Override
+          public void onCameraDidChange(boolean animated) {
+            updateMarkerViewCountText(markerViewManager, viewCountView, markerViewContainer);
           }
         });
 
@@ -198,6 +202,12 @@ public class MarkerViewActivity extends AppCompatActivity {
         mapboxMap.selectMarker(markerRightBottomOffScreen);
       }
     });
+  }
+
+  private void updateMarkerViewCountText(MarkerViewManager markerViewManager, TextView countView, ViewGroup group) {
+    if (!markerViewManager.getMarkerViewAdapters().isEmpty() && countView != null) {
+      countView.setText(String.format(Locale.getDefault(), "ViewCache size %d", group.getChildCount()));
+    }
   }
 
   private void loopMarkerRotate() {

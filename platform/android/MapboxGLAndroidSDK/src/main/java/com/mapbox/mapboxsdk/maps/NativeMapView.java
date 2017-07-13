@@ -35,7 +35,6 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
 
 import timber.log.Timber;
 
@@ -57,8 +56,8 @@ final class NativeMapView {
   // Device density
   private final float pixelRatio;
 
-  // Listeners for Map change events
-  private CopyOnWriteArrayList<MapView.OnMapChangedListener> onMapChangedListeners;
+  // Dispatcher for incoming Map change events
+  private MapChangeDispatcher mapChangeDispatcher;
 
   // Listener invoked to return a bitmap of the map
   private MapboxMap.SnapshotReadyCallback snapshotReadyCallback;
@@ -71,14 +70,13 @@ final class NativeMapView {
   // Constructors
   //
 
-  public NativeMapView(MapView mapView) {
+  public NativeMapView(MapView mapView, MapChangeDispatcher mapChangeDispatcher) {
     Context context = mapView.getContext();
     fileSource = FileSource.getInstance(context);
 
     pixelRatio = context.getResources().getDisplayMetrics().density;
-    onMapChangedListeners = new CopyOnWriteArrayList<>();
     this.mapView = mapView;
-
+    this.mapChangeDispatcher = mapChangeDispatcher;
     String programCacheDir = context.getCacheDir().getAbsolutePath();
     nativeInitialize(this, fileSource, pixelRatio, programCacheDir);
   }
@@ -886,16 +884,52 @@ final class NativeMapView {
     }
   }
 
-  protected void onMapChanged(int rawChange) {
-    if (onMapChangedListeners != null) {
-      for (MapView.OnMapChangedListener onMapChangedListener : onMapChangedListeners) {
-        try {
-          onMapChangedListener.onMapChanged(rawChange);
-        } catch (RuntimeException err) {
-          Timber.e("Exception (%s) in MapView.OnMapChangedListener: %s", err.getClass(), err.getMessage());
-        }
-      }
-    }
+  protected void onCameraWillChange(boolean animated) {
+    mapChangeDispatcher.onCameraWillChange(animated);
+  }
+
+  protected void onCameraIsChanging() {
+    mapChangeDispatcher.onCameraIsChanging();
+  }
+
+  protected void onCameraDidChange(boolean animated) {
+    mapChangeDispatcher.onCameraDidChange(animated);
+  }
+
+  protected void onWillStartLoadingMap() {
+    mapChangeDispatcher.onWillStartLoadingMap();
+  }
+
+  protected void onDidFinishLoadingMap() {
+    mapChangeDispatcher.onDidFinishLoadingMap();
+  }
+
+  protected void onDidFailLoadingMap(String erorMessage) {
+    mapChangeDispatcher.onDidFailLoadingMap(erorMessage);
+  }
+
+  protected void onWillStartRenderingFrame() {
+    mapChangeDispatcher.onWillStartRenderingFrame();
+  }
+
+  protected void onDidFinishRenderingFrame(boolean partial) {
+    mapChangeDispatcher.onDidFinishRenderingFrame(partial);
+  }
+
+  protected void onWillStartRenderingMap() {
+    mapChangeDispatcher.onWillStartRenderingMap();
+  }
+
+  protected void onDidFinishRenderingMap(boolean partial) {
+    mapChangeDispatcher.onDidFinishRenderingMap(partial);
+  }
+
+  protected void onDidFinishLoadingStyle() {
+    mapChangeDispatcher.onDidFinishLoadingStyle();
+  }
+
+  protected void onSourceChanged(String id) {
+    mapChangeDispatcher.onSourceChanged(id);
   }
 
   protected void onFpsChanged(double fps) {
@@ -1130,11 +1164,11 @@ final class NativeMapView {
   //
 
   void addOnMapChangedListener(@NonNull MapView.OnMapChangedListener listener) {
-    onMapChangedListeners.add(listener);
+    mapChangeDispatcher.addOnMapChangedListener(listener);
   }
 
   void removeOnMapChangedListener(@NonNull MapView.OnMapChangedListener listener) {
-    onMapChangedListeners.remove(listener);
+    mapChangeDispatcher.removeOnMapChangedListener(listener);
   }
 
   //

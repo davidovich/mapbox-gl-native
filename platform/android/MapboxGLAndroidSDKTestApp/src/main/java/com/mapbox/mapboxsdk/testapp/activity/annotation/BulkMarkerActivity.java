@@ -228,14 +228,12 @@ public class BulkMarkerActivity extends AppCompatActivity implements AdapterView
 
         viewCountView = (TextView) findViewById(R.id.countView);
 
-        mapView.addOnMapChangedListener(new MapView.OnMapChangedListener() {
+        mapView.setOnCameraIsChangingListener(new MapView.OnCameraIsChangingListener() {
           @Override
-          public void onMapChanged(@MapView.MapChange int change) {
-            if (change == MapView.REGION_IS_CHANGING || change == MapView.REGION_DID_CHANGE) {
-              if (!mapboxMap.getMarkerViewManager().getMarkerViewAdapters().isEmpty()) {
-                viewCountView.setText(String.format(Locale.getDefault(), "ViewCache size %d",
-                  mapboxMap.getMarkerViewManager().getMarkerViewContainer().getChildCount()));
-              }
+          public void onCameraIsChanging() {
+            if (!mapboxMap.getMarkerViewManager().getMarkerViewAdapters().isEmpty()) {
+              viewCountView.setText(String.format(Locale.getDefault(), "ViewCache size %d",
+                mapboxMap.getMarkerViewManager().getMarkerViewContainer().getChildCount()));
             }
           }
         });

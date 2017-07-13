@@ -50,7 +50,7 @@ class AnnotationManager {
   private Polygons polygons;
   private Polylines polylines;
 
-  AnnotationManager(NativeMapView view, MapView mapView, LongSparseArray<Annotation> annotationsArray,
+  AnnotationManager(MapView mapView, LongSparseArray<Annotation> annotationsArray,
                     MarkerViewManager markerViewManager, IconManager iconManager, Annotations annotations,
                     Markers markers, Polygons polygons, Polylines polylines) {
     this.mapView = mapView;
@@ -61,10 +61,6 @@ class AnnotationManager {
     this.markers = markers;
     this.polygons = polygons;
     this.polylines = polylines;
-    if (view != null) {
-      // null checking needed for unit tests
-      view.addOnMapChangedListener(markerViewManager);
-    }
   }
 
   // TODO refactor MapboxMap out for Projection and Transform

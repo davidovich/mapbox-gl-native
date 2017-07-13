@@ -184,19 +184,30 @@ public final class MapboxMap {
   /**
    * Called when the region is changing or has changed.
    */
-  void onUpdateRegionChange() {
+  void onCameraChange() {
     trackingSettings.update();
     annotationManager.update();
   }
 
   /**
+   * Called when the region did change animated
+   */
+  void onCameraDidChangeAnimated() {
+    transform.onCameraDidChangeAnimated();
+  }
+
+  /**
    * Called when the map frame is fully rendered.
    */
-  void onUpdateFullyRendered() {
+  void onDidFinishRenderingFrame() {
     CameraPosition cameraPosition = transform.invalidateCameraPosition();
     if (cameraPosition != null) {
       uiSettings.update(cameraPosition);
     }
+  }
+
+  void onDidFinishRenderingFrameFully() {
+    annotationManager.getMarkerViewManager().onDidFinishRenderingFrameFully();
   }
 
   // Style
