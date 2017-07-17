@@ -32,6 +32,7 @@ template<typename T>
 class Result : private variant<EvaluationError, T> {
 public:
     using variant<EvaluationError, T>::variant;
+    using Value = T;
     
     explicit operator bool () const {
         return this->template is<T>();
@@ -72,11 +73,13 @@ struct CompileError {
     std::string key;
 };
 
-class Expression {
+class TypedExpression {
 public:
-    Expression(std::string key_, type::Type type_) : key(key_), type(type_) {}
-    virtual ~Expression() {};
+    TypedExpression(type::Type type_) : type(type_) {}
+    virtual ~TypedExpression() {};
     
+    virtual bool isFeatureConstant() const { return true; }
+    virtual bool isZoomConstant() const { return true; }
     virtual EvaluationResult evaluate(const EvaluationParameters& params) const = 0;
     
     /*
@@ -101,47 +104,61 @@ public:
     EvaluationResult evaluate(float z, const Feature& feature) const;
     
     type::Type getType() const { return type; }
-    std::string getKey() const { return key; }
-    
-    virtual bool isFeatureConstant() const { return true; }
-    virtual bool isZoomConstant() const { return true; }
-    
-protected:
-    void setType(type::Type newType) { type = newType; }
     
 private:
-    std::string key;
     type::Type type;
 };
 
+using TypecheckResult = optional<std::unique_ptr<TypedExpression>>;
 
-using ParseResult = variant<CompileError, std::unique_ptr<Expression>>;
+class UntypedExpression {
+public:
+    UntypedExpression(std::string key_) : key(key_) {}
+    virtual ~UntypedExpression() {}
+    
+    std::string getKey() const { return key; }
+    virtual TypecheckResult typecheck(const type::Type& expected, std::vector<CompileError>& errors) const = 0;
+private:
+    std::string key;
+};
+
+using ParseResult = variant<CompileError, std::unique_ptr<UntypedExpression>>;
 template <class V>
 ParseResult parseExpression(const V& value, const ParsingContext& context);
 
-using TypecheckResult = variant<std::vector<CompileError>, std::unique_ptr<Expression>>;
-
-using namespace mbgl::style::conversion;
-
-class LiteralExpression : public Expression {
+class TypedLiteral : public TypedExpression {
 public:
-    LiteralExpression(std::string key_, Value value_) : Expression(key_, typeOf(value_)), value(value_) {}
-    
-    Value getValue() const { return value; }
-
+    TypedLiteral(Value value_) : TypedExpression(typeOf(value_)) {}
     EvaluationResult evaluate(const EvaluationParameters&) const override {
         return value;
     }
-    
+private:
+    Value value;
+};
+
+class UntypedLiteral : public UntypedExpression {
+public:
+    TypecheckResult typecheck(const type::Type& expected, std::vector<CompileError>& errors) const override {
+        const auto& error = matchType(expected, typeOf(value));
+        if (error) {
+            errors.push_back({ *error, getKey() });
+            return {};
+        };
+        return {std::make_unique<TypedLiteral>(value)};
+    }
+
     template <class V>
     static ParseResult parse(const V& value, const ParsingContext& ctx) {
         const Value& parsedValue = parseValue(value);
-        return std::make_unique<LiteralExpression>(ctx.key(), parsedValue);
+        return std::make_unique<UntypedLiteral>(ctx.key(), parsedValue);
     }
-    
+
 private:
+    UntypedLiteral(std::string key_, Value value_) : UntypedExpression(key_), value(value_) {}
+    
     template <class V>
     static Value parseValue(const V& value) {
+        using namespace mbgl::style::conversion;
         if (isUndefined(value)) return Null;
         if (isObject(value)) {
             std::unordered_map<std::string, Value> result;
@@ -164,91 +181,191 @@ private:
         assert(v);
         return convertValue(*v);
     }
-
+    
     Value value;
 };
 
-struct NArgs {
-    std::vector<type::Type> types;
-    optional<std::size_t> N;
-};
-
-class LambdaExpression : public Expression {
+template <typename R, typename ...Params>
+class TypedCompoundExpression : public TypedExpression {
 public:
-    using Params = std::vector<variant<type::Type, NArgs>>;
-    using Args = std::vector<std::unique_ptr<Expression>>;
-
-    LambdaExpression(std::string key_,
-                    std::string name_,
-                    Args args_,
-                    type::Type type_,
-                    std::vector<Params> signatures_) :
-        Expression(key_, type_),
-        args(std::move(args_)),
-        signatures(signatures_),
-        name(name_)
+    using Args = std::array<std::unique_ptr<TypedExpression>, sizeof...(Params)>;
+    
+    TypedCompoundExpression(type::Type type,
+                            R (*evaluate_)(Params...),
+                            Args args_) :
+        TypedExpression(type),
+        evaluateFunction(evaluate_),
+        args(std::move(args_))
     {}
     
-    std::string getName() const { return name; }
-    
-    virtual bool isFeatureConstant() const override {
-        bool isFC = true;
-        for (const auto& arg : args) {
-            isFC = isFC && arg->isFeatureConstant();
-        }
-        return isFC;
+    EvaluationResult evaluate(const EvaluationParameters& params) const override {
+        return applyEvaluateFunction(params, std::index_sequence_for<Params...>{});
     }
     
-    virtual bool isZoomConstant() const override {
-        bool isZC = true;
-        for (const auto& arg : args) {
-            isZC = isZC && arg->isZoomConstant();
+private:
+    template <std::size_t ...I>
+    EvaluationResult applyEvaluateFunction(const EvaluationParameters& params, std::index_sequence<I...>) const
+    {
+        const std::vector<EvaluationResult>& evaluated = {std::get<I>(args)->evaluate(params)...};
+        for (const auto& arg : evaluated) {
+            if(!arg) return arg.error();
         }
-        return isZC;
+        // TODO: assert correct runtime type of each arg value
+        const R& result = evaluateFunction(evaluated.at(I)->get<Params>()...);
+        if (!result) return result.error();
+        return *result;
     }
     
-    virtual std::unique_ptr<Expression> applyInferredType(const type::Type& type, Args args) const = 0;
-    
-    friend TypecheckResult typecheck(const type::Type& expected, const std::unique_ptr<Expression>& e);
 
-    template <class Expr, class V>
+    R (*evaluateFunction)(Params...);
+    Args args;
+};
+
+struct SignatureBase {
+    SignatureBase(type::Type result_, std::vector<type::Type> params_) :
+        result(result_),
+        params(params_)
+    {}
+    virtual ~SignatureBase() {}
+    virtual std::unique_ptr<TypedExpression> makeTypedExpression(std::vector<std::unique_ptr<TypedExpression>>) const = 0;
+    type::Type result;
+    std::vector<type::Type> params;
+};
+
+template <typename R, typename ...Params>
+struct Signature : SignatureBase {
+    Signature(R (*evaluate_)(Params...)) :
+        SignatureBase(
+            valueTypeToExpressionType<typename R::Value>(),
+            {valueTypeToExpressionType<Params>()...}
+        ),
+        evaluate(evaluate_)
+    {}
+    
+    std::unique_ptr<TypedExpression> makeTypedExpression(std::vector<std::unique_ptr<TypedExpression>> args) const override {
+        typename TypedCompoundExpression<R, Params...>::Args argsArray;
+        std::copy_n(std::make_move_iterator(args.begin()), sizeof...(Params), argsArray.begin());
+        return std::make_unique<TypedCompoundExpression<R, Params...>>(result,
+                                                                       evaluate,
+                                                                       std::move(argsArray));
+    }
+    
+    R (*evaluate)(Params...);
+};
+
+struct CompoundExpression {
+    using Definition = std::vector<std::unique_ptr<SignatureBase>>;
+    
+    static std::unordered_map<std::string, Definition> definitions;
+    
+//    TODO: haven't figured out how to instantiate Signature<> with each of the evalFunctions arguments
+
+//    template <typename ...Evals, typename std::enable_if_t<sizeof...(Evals) != 0, int> = 0>
+//    static int registerExpression(std::string name, Evals... evalFunctions) {
+//        Definition definition = {std::make_unique<Signature>(evalFunctions)...};
+//        const auto& t0 = definition.at(0)->result;
+//        for (const auto& signature : definition) {
+//            // TODO replace with real ==
+//            assert(toString(t0) == toString(signature->result));
+//        }
+//        definitions.emplace(name, std::move(definition));
+//        return 0;
+//    }
+    template <typename R, typename ...Params>
+    static int registerSignature(std::string name, R (*evaluate) (Params...)) {
+        auto signature = std::make_unique<Signature<R, Params...>>(evaluate);
+        if (definitions.find(name) == definitions.end()) {
+            definitions.emplace(name, std::vector<std::unique_ptr<SignatureBase>>());
+        }
+        definitions.at(name).push_back(std::move(signature));
+        return 0;
+    }
+
+};
+
+class UntypedCompoundExpression : public UntypedExpression {
+public:
+    using Args = std::vector<std::unique_ptr<UntypedExpression>>;
+    
+    template <class V>
     static ParseResult parse(const V& value, const ParsingContext& ctx) {
-        assert(isArray(value));
+        using namespace mbgl::style::conversion;
+        assert(isArray(value) && arrayLength(value) > 0);
+        const auto& name = toString(arrayMember(value, 0));
+        assert(name);
+        
+        if (CompoundExpression::definitions.find(*name) == CompoundExpression::definitions.end()) {
+            return CompileError {
+                std::string("Unknown expression \"") + *name + "\". If you wanted a literal array, use [\"literal\", [...]].",
+                ctx.key(0)
+            };
+        }
+        
+        std::vector<std::unique_ptr<UntypedExpression>> args;
         auto length = arrayLength(value);
-        const std::string& name = *toString(arrayMember(value, 0));
-        Args args;
-        for(size_t i = 1; i < length; i++) {
-            const auto& arg = arrayMember(value, i);
-            auto parsedArg = parseExpression(arg, ParsingContext(ctx, i, {}));
-            if (parsedArg.template is<std::unique_ptr<Expression>>()) {
-                args.push_back(std::move(parsedArg.template get<std::unique_ptr<Expression>>()));
-            } else {
-                return parsedArg.template get<CompileError>();
+        for (std::size_t i = 1; i < length; i++) {
+            auto parsed = parseExpression(arrayMember(value, i), ParsingContext(ctx, {i}, name));
+            if (parsed.template is<CompileError>()) {
+                return parsed;
+            }
+            args.push_back(std::move(parsed.template get<std::unique_ptr<UntypedExpression>>()));
+        }
+        
+        return std::make_unique<UntypedCompoundExpression>(ctx.key(), *name, std::move(args));
+    }
+
+    TypecheckResult typecheck(const type::Type& expected, std::vector<CompileError>& errors) const override {
+        const auto& definition = CompoundExpression::definitions.at(name);
+        
+        std::vector<CompileError> currentSignatureErrors;
+        for (const auto& signature : definition) {
+            currentSignatureErrors.clear();
+            
+            if (signature->params.size() != args.size()) {
+                currentSignatureErrors.emplace_back(CompileError {
+                    "Expected " + std::to_string(signature->params.size()) +
+                    " arguments, but found " + std::to_string(args.size()) + " instead.",
+                    getKey()
+                });
+                continue;
+            }
+            
+            const auto& error = matchType(expected, signature->result);
+            if (error) {
+                currentSignatureErrors.emplace_back(CompileError {
+                    *error,
+                    getKey()
+                });
+                continue;
+            }
+
+            std::vector<std::unique_ptr<TypedExpression>> checkedArgs;
+            for (size_t i = 0; i < args.size(); i++) {
+                const auto& param = signature->params.at(i);
+                const auto& arg = args.at(i);
+                auto checked = arg->typecheck(param, currentSignatureErrors);
+                if (checked) {
+                    checkedArgs.push_back(std::move(*checked));
+                }
+            }
+            
+            if (currentSignatureErrors.size() == 0) {
+                return signature->makeTypedExpression(std::move(checkedArgs));
             }
         }
-        return std::make_unique<Expr>(ctx.key(), name, std::move(args));
+        
+        errors.insert(errors.end(), currentSignatureErrors.begin(), currentSignatureErrors.end());
+        return {};
     }
     
-protected:
-    Args args;
 private:
-    std::vector<Params> signatures;
+    UntypedCompoundExpression(std::string key, std::string name_, std::vector<std::unique_ptr<UntypedExpression>> args_) :
+        UntypedExpression(key),
+        name(name_),
+        args(std::move(args_))
+    {}
     std::string name;
-};
-
-template<class Expr>
-class LambdaBase : public LambdaExpression {
-public:
-    LambdaBase(const std::string& key, const std::string& name, Args args) :
-        LambdaExpression(key, name, std::move(args), Expr::type(), Expr::signatures())
-    {}
-    LambdaBase(const std::string& key, const std::string& name, const type::Type& type, Args args) :
-        LambdaExpression(key, name, std::move(args), type, Expr::signatures())
-    {}
-
-    std::unique_ptr<Expression> applyInferredType(const type::Type& type, Args args) const override {
-        return std::make_unique<Expr>(getKey(), getName(), type, std::move(args));
-    }
+    std::vector<std::unique_ptr<UntypedExpression>> args;
 };
 
 

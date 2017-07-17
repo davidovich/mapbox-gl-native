@@ -397,11 +397,9 @@ set(MBGL_CORE_FILES
     include/mbgl/style/expression/parse.hpp
     include/mbgl/style/expression/parsing_context.hpp
     include/mbgl/style/expression/type.hpp
-    include/mbgl/style/expression/type_check.hpp
     include/mbgl/style/expression/value.hpp
     src/mbgl/style/expression/definitions.cpp
     src/mbgl/style/expression/type.cpp
-    src/mbgl/style/expression/type_check.cpp
     src/mbgl/style/expression/value.cpp
 
     # style/function

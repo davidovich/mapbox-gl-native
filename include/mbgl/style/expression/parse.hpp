@@ -30,7 +30,7 @@ std::string getJSType(const V& value) {
     );
 }
 
-using ParseResult = variant<CompileError, std::unique_ptr<Expression>>;
+using ParseResult = variant<CompileError, std::unique_ptr<UntypedExpression>>;
 
 template <class V>
 ParseResult parseExpression(const V& value, const ParsingContext& context)
@@ -62,38 +62,38 @@ ParseResult parseExpression(const V& value, const ParsingContext& context)
                 "'literal' expression requires exactly one argument, but found " + std::to_string(length - 1) + " instead.",
                 context.key()
             };
-            return LiteralExpression::parse(arrayMember(value, 1), ParsingContext(context, {1}, {"literal"}));
+            return UntypedLiteral::parse(arrayMember(value, 1), ParsingContext(context, {1}, {"literal"}));
         }
 
-        if (*op == "e") return MathConstant::e(context);
-        if (*op == "pi") return MathConstant::pi(context);
-        if (*op == "ln2") return MathConstant::ln2(context);
-        if (*op == "typeof") return LambdaExpression::parse<TypeOf>(value, context);
-        if (*op == "string") return LambdaExpression::parse<Assertion<std::string>>(value, context);
-        if (*op == "number") return LambdaExpression::parse<Assertion<float>>(value, context);
-        if (*op == "boolean") return LambdaExpression::parse<Assertion<bool>>(value, context);
-        if (*op == "array") return Array::parse(value, context);
-        if (*op == "to_string") return LambdaExpression::parse<ToString>(value, context);
-        if (*op == "to_number") return LambdaExpression::parse<ToNumber>(value, context);
-        if (*op == "to_boolean") return LambdaExpression::parse<ToBoolean>(value, context);
-        if (*op == "to_rgba") return LambdaExpression::parse<ToRGBA>(value, context);
-        if (*op == "parse_color") return LambdaExpression::parse<ParseColor>(value, context);
-        if (*op == "rgba") return LambdaExpression::parse<RGBA>(value, context);
-        if (*op == "rgb") return LambdaExpression::parse<RGB>(value, context);
-        if (*op == "get") return LambdaExpression::parse<Get>(value, context);
-        if (*op == "has") return LambdaExpression::parse<Has>(value, context);
-        if (*op == "at") return LambdaExpression::parse<At>(value, context);
-        if (*op == "length") return LambdaExpression::parse<Length>(value, context);
-        if (*op == "properties") return LambdaExpression::parse<Properties>(value, context);
-        if (*op == "id") return LambdaExpression::parse<Id>(value, context);
-        if (*op == "geometry_type") return LambdaExpression::parse<GeometryType>(value, context);
-        if (*op == "+") return LambdaExpression::parse<Plus>(value, context);
-        if (*op == "-") return LambdaExpression::parse<Minus>(value, context);
-        if (*op == "*") return LambdaExpression::parse<Times>(value, context);
-        if (*op == "/") return LambdaExpression::parse<Divide>(value, context);
-        if (*op == "^") return LambdaExpression::parse<Power>(value, context);
-        if (*op == "%") return LambdaExpression::parse<Mod>(value, context);
-        if (*op == "coalesce") return LambdaExpression::parse<Coalesce>(value, context);
+//        if (*op == "e") return MathConstant::e(context);
+//        if (*op == "pi") return MathConstant::pi(context);
+//        if (*op == "ln2") return MathConstant::ln2(context);
+//        if (*op == "typeof") return LambdaExpression::parse<TypeOf>(value, context);
+//        if (*op == "string") return LambdaExpression::parse<Assertion<std::string>>(value, context);
+//        if (*op == "number") return LambdaExpression::parse<Assertion<float>>(value, context);
+//        if (*op == "boolean") return LambdaExpression::parse<Assertion<bool>>(value, context);
+//        if (*op == "array") return Array::parse(value, context);
+//        if (*op == "to_string") return LambdaExpression::parse<ToString>(value, context);
+//        if (*op == "to_number") return LambdaExpression::parse<ToNumber>(value, context);
+//        if (*op == "to_boolean") return LambdaExpression::parse<ToBoolean>(value, context);
+//        if (*op == "to_rgba") return LambdaExpression::parse<ToRGBA>(value, context);
+//        if (*op == "parse_color") return LambdaExpression::parse<ParseColor>(value, context);
+//        if (*op == "rgba") return LambdaExpression::parse<RGBA>(value, context);
+//        if (*op == "rgb") return LambdaExpression::parse<RGB>(value, context);
+//        if (*op == "get") return LambdaExpression::parse<Get>(value, context);
+//        if (*op == "has") return LambdaExpression::parse<Has>(value, context);
+//        if (*op == "at") return LambdaExpression::parse<At>(value, context);
+//        if (*op == "length") return LambdaExpression::parse<Length>(value, context);
+//        if (*op == "properties") return LambdaExpression::parse<Properties>(value, context);
+//        if (*op == "id") return LambdaExpression::parse<Id>(value, context);
+//        if (*op == "geometry_type") return LambdaExpression::parse<GeometryType>(value, context);
+//        if (*op == "+") return LambdaExpression::parse<Plus>(value, context);
+//        if (*op == "-") return LambdaExpression::parse<Minus>(value, context);
+//        if (*op == "*") return LambdaExpression::parse<Times>(value, context);
+//        if (*op == "/") return LambdaExpression::parse<Divide>(value, context);
+//        if (*op == "^") return LambdaExpression::parse<Power>(value, context);
+//        if (*op == "%") return LambdaExpression::parse<Mod>(value, context);
+//        if (*op == "coalesce") return LambdaExpression::parse<Coalesce>(value, context);
 
         
         return CompileError {
@@ -109,7 +109,7 @@ ParseResult parseExpression(const V& value, const ParsingContext& context)
         };
     }
     
-    return LiteralExpression::parse(value, context);
+    return UntypedLiteral::parse(value, context);
 }
 
 
