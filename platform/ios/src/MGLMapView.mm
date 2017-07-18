@@ -3187,6 +3187,11 @@ public:
     {
         NSAssert([annotation conformsToProtocol:@protocol(MGLAnnotation)], @"annotation should conform to MGLAnnotation");
 
+        if ([annotation conformsToProtocol:@protocol(MGLFeature)])
+        {
+            NSLog(@"Warning: Annotations that conform to the MGLFeature protocol do not keep their `identifier` or `attributes` properties when added to the map as annotations. Add this feature using runtime styling if you intend to later query the map for it. %@", annotation.description);
+        }
+
         // adding the same annotation object twice is a no-op
         if (_annotationTagsByAnnotation.count(annotation) != 0)
         {
