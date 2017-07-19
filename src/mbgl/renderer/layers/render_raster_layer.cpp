@@ -116,8 +116,8 @@ void RenderRasterLayer::render(PaintParameters& parameters, RenderSource* source
             parameters.context.bindTexture(*bucket.texture, 0, gl::TextureFilter::Linear);
             parameters.context.bindTexture(*bucket.texture, 1, gl::TextureFilter::Linear);
 
-            for (auto matrix : imageSource->matrices) {
-                draw(matrix,
+            for (auto matrix_ : imageSource->matrices) {
+                draw(matrix_,
                      *bucket.vertexBuffer,
                      *bucket.indexBuffer,
                      bucket.segments);
