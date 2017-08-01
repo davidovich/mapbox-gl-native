@@ -3791,9 +3791,11 @@ public:
 
     if (annotation == self.selectedAnnotation) return;
 
-    if (annotation != self.userLocation)
+    if (annotation != self.userLocation &&
+       (![self.delegate respondsToSelector:@selector(mapView:selectingAnnotationResetsTrackingMode:)] ||
+       [self.delegate mapView:self selectingAnnotationResetsTrackingMode:annotation]))
     {
-        self.userTrackingMode = MGLUserTrackingModeNone;
+          self.userTrackingMode = MGLUserTrackingModeNone;
     }
 
     [self deselectAnnotation:self.selectedAnnotation animated:NO];
