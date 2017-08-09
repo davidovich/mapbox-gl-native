@@ -12,6 +12,7 @@ set -u
 # environment variables and dependencies:
 #     - You must run "mbx auth ..." before running
 #     - Set GITHUB_TOKEN to a GitHub API access token in your environment to use GITHUB_RELEASE
+# 4c3be075ca86c7fabb5a8aea713b49635a0b037a
 #     - "wget" is required for downloading the zip files from s3
 #     - The "github-release" command is required to use GITHUB_RELEASE
 
@@ -36,26 +37,26 @@ buildPackageStyle() {
         ./platform/ios/scripts/publish.sh "${PUBLISH_VERSION}" ${style}
         file_name=mapbox-ios-sdk-${PUBLISH_VERSION}-${style}.zip
     fi
-    step "Downloading ${file_name} from s3 to ${BINARY_DIRECTORY}"
-    wget -O ${BINARY_DIRECTORY}/${file_name} http://mapbox.s3.amazonaws.com/mapbox-gl-native/ios/builds/${file_name}
-    if [[ "${GITHUB_RELEASE}" == true ]]; then
-        step "Uploading ${file_name} to GitHub"
-        github-release upload \
-            --tag "ios-v${PUBLISH_VERSION}" \
-            --name ${file_name} \
-            --file "${BINARY_DIRECTORY}/${file_name}" > /dev/null
-    fi
+    #step "Downloading ${file_name} from s3 to ${BINARY_DIRECTORY}"
+    #wget -O ${BINARY_DIRECTORY}/${file_name} http://mapbox.s3.amazonaws.com/mapbox-gl-native/ios/builds/${file_name}
+#    if [[ "${GITHUB_RELEASE}" == true ]]; then
+#        step "Uploading ${file_name} to GitHub"
+#        github-release upload \
+#            --tag "ios-v${PUBLISH_VERSION}" \
+#            --name ${file_name} \
+#            --file "${BINARY_DIRECTORY}/${file_name}" > /dev/null
+#    fi
 }
 
 export TRAVIS_REPO_SLUG=mapbox-gl-native
-export GITHUB_USER=mapbox
+export GITHUB_USER=davidovich
 export GITHUB_REPO=mapbox-gl-native
 export BUILDTYPE=Release
 
 VERSION_TAG=${VERSION_TAG:-''}
 PUBLISH_VERSION=
 BINARY_DIRECTORY=${BINARY_DIRECTORY:-build/ios/deploy}
-GITHUB_RELEASE=${GITHUB_RELEASE:-true}
+GITHUB_RELEASE=${GITHUB_RELEASE:-false}
 PUBLISH_PRE_FLAG=''
 
 if [[ ${GITHUB_RELEASE} = "true" ]]; then
@@ -108,9 +109,9 @@ if [[ "${GITHUB_RELEASE}" == true ]]; then
         --draft ${PUBLISH_PRE_FLAG}
 fi
 
-buildPackageStyle "ipackage" "symbols"
-buildPackageStyle "ipackage-strip"
-buildPackageStyle "iframework" "symbols-dynamic"
+#buildPackageStyle "ipackage" "symbols"
+#buildPackageStyle "ipackage-strip"
+#buildPackageStyle "iframework" "symbols-dynamic"
 buildPackageStyle "iframework SYMBOLS=NO" "dynamic"
 
 step "Finished deploying ${PUBLISH_VERSION} in $(($SECONDS / 60)) minutes and $(($SECONDS % 60)) seconds"

@@ -15,7 +15,7 @@ Pod::Spec.new do |m|
   m.documentation_url = 'https://www.mapbox.com/ios-sdk/api/'
 
   m.source = {
-    :http => "https://mapbox.s3.amazonaws.com/mapbox-gl-native/ios/builds/mapbox-ios-sdk-#{m.version.to_s}-dynamic.zip",
+    :http => "https://github.com/davidovich/mapbox-gl-native/releases/download/3.6.0-david/mapbox-ios-sdk-3.6.0-david.zip",
     :flatten => true
   }
 
